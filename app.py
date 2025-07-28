@@ -77,6 +77,12 @@
         .transits-table tr:nth-child(even) {
             background-color: #f9f9f9;
         }
+        .bullish-cell {
+            background-color: rgba(0, 255, 0, 0.1);
+        }
+        .bearish-cell {
+            background-color: rgba(255, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body>
@@ -351,18 +357,17 @@
                 
                 // Determine influence
                 let influence = 'Neutral';
+                let influenceClass = '';
+                
                 if (['Jupiter', 'Venus', 'Sun'].includes(transit.planet)) {
                     influence = transit.aspect === 'square' || transit.aspect === 'opposition' ? 
                                'Mildly Bearish' : 'Bullish';
+                    influenceClass = influence.includes('Bullish') ? 'bullish-cell' : '';
                 } else if (['Saturn', 'Mars', 'Pluto'].includes(transit.planet)) {
                     influence = transit.aspect === 'square' || transit.aspect === 'opposition' ? 
                                'Bearish' : 'Mildly Bullish';
+                    influenceClass = influence.includes('Bearish') ? 'bearish-cell' : '';
                 }
-                
-                // Color based on influence
-                let influenceClass = '';
-                if (influence.includes('Bullish')) influenceClass = 'bullish';
-                if (influence.includes('Bearish')) influenceClass = 'bearish';
                 
                 row.innerHTML = `
                     <td>${new Date(transit.date).toLocaleDateString()}</td>
