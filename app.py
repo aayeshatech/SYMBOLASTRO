@@ -1,10 +1,10 @@
-from flask import Flask, render_template, jsonify
-import numpy as np
+import streamlit as st
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
 import random
-from typing import Dict
-
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 app = Flask(__name__)
 
 class AstroDataGenerator:
