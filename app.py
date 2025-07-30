@@ -3,9 +3,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import time
-import matplotlib.pyplot as plt
-from matplotlib.patches import FancyArrowPatch
-
 # Aspect configurations
 ASPECT_SIGNALS = {
     'conjunction': ('Neutral', 'gray'),
