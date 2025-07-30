@@ -25,7 +25,7 @@ PLANET_SYMBOLS = {
 
 @st.cache_data
 def generate_analysis(symbol, timeframe):
-    """Generate analysis with swing points using only Streamlit-native features"""
+    """Generate analysis with swing points"""
     planets = list(PLANET_SYMBOLS.keys())
     signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 
              'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']
@@ -74,6 +74,7 @@ def generate_analysis(symbol, timeframe):
                 'Symbol': PLANET_SYMBOLS[planet],
                 'Aspect': aspect,
                 'Signal': signal,
+                'Color': color,
                 'Swing': '▲' if prices[i] > (prices[i-1] if i > 0 else base_price) else '▼'
             })
     
@@ -105,23 +106,9 @@ def display_swing_chart(analysis):
     swing_df = chart_data.dropna(subset=['Swing'])
     if not swing_df.empty:
         st.scatter_chart(swing_df['Swing'])
-    
-    # Add astrological annotations using columns
-    cols = st.columns(len(analysis['transits']))
-    for idx, transit in enumerate(analysis['transits']):
-        with cols[idx % len(cols)]:
-            st.markdown(f"""
-            <div style="text-align: center; padding: 5px; margin: 5px; 
-                        border: 1px solid #ddd; border-radius: 5px;
-                        background-color: white;">
-                <div style="font-size: 24px;">{transit['Symbol']}</div>
-                <div>{transit['Planet']}</div>
-                <div>{transit['Aspect']}</div>
-                <div style="color: {ASPECT_SIGNALS[transit['Aspect']][1]}">
-                    {transit['Signal']}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+
+def color_row(row):
+    return [f'background-color: {row["Color"]}; color: white'] * len(row)
 
 def main():
     st.set_page_config(page_title="🌟 Astro Swing Trader", layout="wide")
@@ -149,16 +136,11 @@ def main():
                     st.subheader("🪐 Key Planetary Aspects")
                     transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Symbol', 'Aspect', 'Signal', 'Swing']]
                     st.dataframe(
-                        transits_df.style.apply(
-                            lambda x: [f"background-color: {ASPECT_SIGNALS[x['Aspect']][1]}" 
-                                      if x.name == 'Signal' else '' 
-                                      for _, x in transits_df.iterrows()],
-                            axis=1
-                        ),
+                        transits_df,
                         use_container_width=True
                     )
                     
-                    time.sleep(2)  # Simulate live updates
+                    time.sleep(2)
         else:
             analysis = generate_analysis(symbol.upper(), timeframe)
             display_swing_chart(analysis)
@@ -167,19 +149,13 @@ def main():
             st.subheader("🪐 Key Planetary Aspects")
             transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Symbol', 'Aspect', 'Signal', 'Swing']]
             st.dataframe(
-                transits_df.style.apply(
-                    lambda x: [f"background-color: {ASPECT_SIGNALS[x['Aspect']][1]}" 
-                              if x.name == 'Signal' else '' 
-                              for _, x in transits_df.iterrows()],
-                    axis=1
-                ),
+                transits_df,
                 use_container_width=True
             )
     else:
         st.info("👈 Enter parameters and click 'Generate Analysis'")
         st.markdown("""
         ### Features:
-        - **Pure Streamlit Implementation**: No extra dependencies needed
         - **Swing Analysis**: Automatic pivot point detection
         - **Planetary Markers**: Astrological symbols and aspects
         - **Timeframe Support**: Intraday to monthly analysis
