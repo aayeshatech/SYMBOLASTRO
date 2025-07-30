@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-import random
 
 # Simplified data generator
 class SimpleAstroAnalyzer:
@@ -17,7 +16,7 @@ class SimpleAstroAnalyzer:
         days = {'daily': 7, 'weekly': 30, 'monthly': 90, 'intraday': 1}.get(timeframe, 7)
         
         # Generate random but consistent data
-        np.random.seed(hash(symbol) % 1000)
+        np.random.seed(abs(hash(symbol)) % 1000)  # Using abs() to ensure positive seed
         
         bullish_prob = np.random.beta(2, 2)  # Generates values between 0 and 1
         bearish_prob = 1 - bullish_prob
