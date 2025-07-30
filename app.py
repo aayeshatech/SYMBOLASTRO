@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import time
+
 # Aspect configurations
 ASPECT_SIGNALS = {
     'conjunction': ('Neutral', 'gray'),
@@ -12,20 +13,20 @@ ASPECT_SIGNALS = {
     'opposition': ('Strong Bearish', 'red')
 }
 
-PLANET_COLORS = {
-    'Sun': '#FFD700',  # Gold
-    'Moon': '#C0C0C0', # Silver
-    'Mercury': '#8B4513',  # Brown
-    'Venus': '#FFA500',  # Orange
-    'Mars': '#FF0000',  # Red
-    'Jupiter': '#800080',  # Purple
-    'Saturn': '#0000FF'  # Blue
+PLANET_SYMBOLS = {
+    'Sun': '☉',
+    'Moon': '☽',
+    'Mercury': '☿',
+    'Venus': '♀',
+    'Mars': '♂',
+    'Jupiter': '♃',
+    'Saturn': '♄'
 }
 
 @st.cache_data
 def generate_analysis(symbol, timeframe):
-    """Generate analysis with swing points"""
-    planets = list(PLANET_COLORS.keys())
+    """Generate analysis with swing points using only Streamlit-native features"""
+    planets = list(PLANET_SYMBOLS.keys())
     signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 
              'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']
     
@@ -70,9 +71,9 @@ def generate_analysis(symbol, timeframe):
                 'Date': dates[i],
                 'Price': prices[i],
                 'Planet': planet,
+                'Symbol': PLANET_SYMBOLS[planet],
                 'Aspect': aspect,
                 'Signal': signal,
-                'Color': PLANET_COLORS[planet],
                 'Swing': '▲' if prices[i] > (prices[i-1] if i > 0 else base_price) else '▼'
             })
     
@@ -85,45 +86,36 @@ def generate_analysis(symbol, timeframe):
         'transits': transits
     }
 
-def create_swing_chart(analysis):
-    """Create swing chart with Matplotlib"""
-    fig, ax = plt.subplots(figsize=(12, 6))
+def display_swing_chart(analysis):
+    """Display swing chart using Streamlit's native line_chart with annotations"""
+    # Create DataFrame for the chart
+    chart_data = pd.DataFrame({
+        'Price': analysis['prices'],
+        'Swing': [np.nan] * len(analysis['prices'])
+    }, index=analysis['dates'])
     
-    # Price line
-    ax.plot(analysis['dates'], analysis['prices'], 
-           color='royalblue', linewidth=2, label='Price')
+    # Mark swing points
+    for i in analysis['swings']:
+        chart_data.iloc[i, 1] = chart_data.iloc[i, 0]
     
-    # Swing points
-    swing_dates = [analysis['dates'][i] for i in analysis['swings']]
-    swing_prices = [analysis['prices'][i] for i in analysis['swings']]
-    ax.scatter(swing_dates, swing_prices, 
-              color='red', s=100, marker='D', label='Swing Points')
+    # Display the main chart
+    st.line_chart(chart_data['Price'])
     
-    # Astro markers
+    # Add swing point markers
+    swing_df = chart_data.dropna(subset=['Swing'])
+    if not swing_df.empty:
+        st.scatter_chart(swing_df['Swing'])
+    
+    # Add astrological annotations
     for transit in analysis['transits']:
-        ax.annotate(
-            f"{transit['Planet']}\n{transit['Aspect']}",
-            xy=(transit['Date'], transit['Price']),
-            xytext=(0, -40),
-            textcoords='offset points',
-            ha='center',
-            va='bottom',
-            color=transit['Color'],
-            fontsize=10,
-            fontweight='bold',
-            bbox=dict(boxstyle='round,pad=0.5', fc='white', alpha=0.8),
-            arrowprops=dict(arrowstyle='->', color=transit['Color'])
-        )
-    
-    # Chart styling
-    ax.set_title(f"{analysis['symbol']} {analysis['timeframe'].capitalize()} Price with Astro Aspects")
-    ax.set_xlabel('Date/Time')
-    ax.set_ylabel('Price')
-    ax.grid(True, linestyle='--', alpha=0.7)
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    
-    return fig
+        st.markdown(f"""
+        <div style="position: absolute; left: {20 + (analysis['dates'].index(transit['Date']) * 7}%; 
+                    top: {60 - (transit['Price'] - min(analysis['prices'])) / (max(analysis['prices']) - min(analysis['prices']) + 0.0001) * 30}%; 
+                    color: black; font-weight: bold; background-color: white; 
+                    padding: 2px; border-radius: 3px; border: 1px solid #ddd;">
+            {transit['Symbol']} {transit['Aspect']}
+        </div>
+        """, unsafe_allow_html=True)
 
 def main():
     st.set_page_config(page_title="🌟 Astro Swing Trader", layout="wide")
@@ -145,12 +137,11 @@ def main():
             for _ in range(3):  # Simulate 3 updates for demo
                 with placeholder.container():
                     analysis = generate_analysis(symbol.upper(), timeframe)
-                    fig = create_swing_chart(analysis)
-                    st.pyplot(fig)
+                    display_swing_chart(analysis)
                     
                     # Transits table
                     st.subheader("🪐 Key Planetary Aspects")
-                    transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Aspect', 'Signal', 'Swing']]
+                    transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Symbol', 'Aspect', 'Signal', 'Swing']]
                     st.dataframe(
                         transits_df.style.apply(
                             lambda x: [f"background-color: {ASPECT_SIGNALS[x['Aspect']][1]}" 
@@ -164,12 +155,11 @@ def main():
                     time.sleep(2)  # Simulate live updates
         else:
             analysis = generate_analysis(symbol.upper(), timeframe)
-            fig = create_swing_chart(analysis)
-            st.pyplot(fig)
+            display_swing_chart(analysis)
             
             # Transits table
             st.subheader("🪐 Key Planetary Aspects")
-            transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Aspect', 'Signal', 'Swing']]
+            transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Symbol', 'Aspect', 'Signal', 'Swing']]
             st.dataframe(
                 transits_df.style.apply(
                     lambda x: [f"background-color: {ASPECT_SIGNALS[x['Aspect']][1]}" 
@@ -181,13 +171,12 @@ def main():
             )
     else:
         st.info("👈 Enter parameters and click 'Generate Analysis'")
-        st.image("https://via.placeholder.com/800x300?text=Astro+Swing+Trader", use_column_width=True)
         st.markdown("""
         ### Features:
-        - **Dynamic Swing Charts**: Visualize price swings with astrological markers
-        - **Intraday Mode**: Live simulation with 30-minute intervals
-        - **Planetary Aspects**: Marked directly on price chart
-        - **Swing Signals**: Diamond markers show pivot points
+        - **Pure Streamlit Implementation**: No extra dependencies needed
+        - **Swing Analysis**: Automatic pivot point detection
+        - **Planetary Markers**: Astrological symbols and aspects
+        - **Timeframe Support**: Intraday to monthly analysis
         """)
 
 if __name__ == "__main__":
