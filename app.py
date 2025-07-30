@@ -1,12 +1,11 @@
-from flask import Flask, jsonify, render_template_string
+import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import random
 from typing import Dict
-import json
-
-app = Flask(__name__)
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 class AstroDataGenerator:
     """Generates simulated astronomical data for trading analysis"""
@@ -126,20 +125,11 @@ class AstroTradingAnalyzer:
         return {
             'symbol': symbol,
             'timeframe': timeframe,
-            'transits': self._serialize_dataframe(transits),
-            'probabilities': self._serialize_dataframe(probabilities),
-            'price_data': self._serialize_dataframe(price_data),
+            'transits': transits,
+            'probabilities': probabilities,
+            'price_data': price_data,
             'current_recommendation': self._generate_recommendation(probabilities.iloc[-1])
         }
-    
-    def _serialize_dataframe(self, df: pd.DataFrame) -> list:
-        """Convert DataFrame to JSON-serializable format"""
-        # Convert datetime objects to strings
-        df_copy = df.copy()
-        for col in df_copy.columns:
-            if df_copy[col].dtype == 'datetime64[ns]' or isinstance(df_copy[col].iloc[0] if len(df_copy) > 0 else None, datetime):
-                df_copy[col] = df_copy[col].astype(str)
-        return df_copy.to_dict('records')
     
     def _generate_price_data(self, probabilities: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         """Generate simulated price data based on astro probabilities"""
@@ -204,117 +194,131 @@ class AstroTradingAnalyzer:
             'bearish_prob': f"{latest_prob['bearish_prob']*100:.1f}%"
         }
 
-# HTML template for the main page
-INDEX_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Astrological Trading Analysis</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { color: #333; text-align: center; margin-bottom: 30px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
-        select, input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
-        button { background-color: #4CAF50; color: white; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; width: 100%; }
-        button:hover { background-color: #45a049; }
-        .result { margin-top: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 5px; display: none; }
-        .recommendation { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
-        .buy { color: #4CAF50; }
-        .sell { color: #f44336; }
-        .neutral { color: #ff9800; }
-        .loading { text-align: center; color: #666; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🌟 Astrological Trading Analysis</h1>
-        <form id="analysisForm">
-            <div class="form-group">
-                <label for="symbol">Stock Symbol:</label>
-                <input type="text" id="symbol" name="symbol" placeholder="e.g., AAPL, GOOGL, TSLA" required>
-            </div>
-            <div class="form-group">
-                <label for="timeframe">Timeframe:</label>
-                <select id="timeframe" name="timeframe" required>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="intraday">Intraday</option>
-                </select>
-            </div>
-            <button type="submit">Generate Analysis</button>
-        </form>
-        
-        <div id="result" class="result">
-            <div id="loading" class="loading">Analyzing planetary positions...</div>
-            <div id="analysis" style="display: none;"></div>
-        </div>
-    </div>
+def create_price_chart(price_data, symbol):
+    """Create a price chart with bullish/bearish probabilities"""
+    fig = make_subplots(
+        rows=2, cols=1,
+        subplot_titles=[f'{symbol} Price Chart', 'Bullish/Bearish Probabilities'],
+        row_heights=[0.7, 0.3],
+        vertical_spacing=0.1
+    )
+    
+    # Price chart
+    fig.add_trace(
+        go.Scatter(
+            x=price_data['timestamp'],
+            y=price_data['price'],
+            mode='lines',
+            name='Price',
+            line=dict(color='blue', width=2)
+        ),
+        row=1, col=1
+    )
+    
+    # Probability charts
+    fig.add_trace(
+        go.Scatter(
+            x=price_data['timestamp'],
+            y=price_data['bullish_prob'],
+            mode='lines',
+            name='Bullish Probability',
+            line=dict(color='green', width=2)
+        ),
+        row=2, col=1
+    )
+    
+    fig.add_trace(
+        go.Scatter(
+            x=price_data['timestamp'],
+            y=price_data['bearish_prob'],
+            mode='lines',
+            name='Bearish Probability',
+            line=dict(color='red', width=2)
+        ),
+        row=2, col=1
+    )
+    
+    fig.update_layout(
+        title=f"Astrological Trading Analysis - {symbol}",
+        xaxis_title="Time",
+        height=600,
+        showlegend=True
+    )
+    
+    fig.update_yaxes(title_text="Price ($)", row=1, col=1)
+    fig.update_yaxes(title_text="Probability", row=2, col=1)
+    
+    return fig
 
-    <script>
-        document.getElementById('analysisForm').addEventListener('submit', function(e) {
-            e.preventDefault();
+def main():
+    st.set_page_config(page_title="🌟 Astrological Trading Analysis", layout="wide")
+    
+    st.title("🌟 Astrological Trading Analysis")
+    st.markdown("*Generate trading insights based on planetary alignments and astrological aspects*")
+    
+    # Sidebar inputs
+    st.sidebar.header("Analysis Parameters")
+    symbol = st.sidebar.text_input("Stock Symbol", value="AAPL", help="Enter stock ticker (e.g., AAPL, GOOGL)")
+    timeframe = st.sidebar.selectbox(
+        "Timeframe",
+        ["daily", "weekly", "monthly", "intraday"],
+        help="Select analysis timeframe"
+    )
+    
+    if st.sidebar.button("Generate Analysis", type="primary"):
+        with st.spinner("Analyzing planetary positions..."):
+            analyzer = AstroTradingAnalyzer()
+            analysis = analyzer.generate_analysis(symbol.upper(), timeframe)
             
-            const symbol = document.getElementById('symbol').value.toUpperCase();
-            const timeframe = document.getElementById('timeframe').value;
+            # Display recommendation
+            rec = analysis['current_recommendation']
             
-            document.getElementById('result').style.display = 'block';
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('analysis').style.display = 'none';
+            col1, col2, col3 = st.columns(3)
             
-            fetch(`/api/analysis/${symbol}/${timeframe}`)
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('analysis').style.display = 'block';
-                    
-                    const rec = data.current_recommendation;
-                    let recClass = 'neutral';
-                    if (rec.recommendation.includes('Buy')) recClass = 'buy';
-                    else if (rec.recommendation.includes('Sell')) recClass = 'sell';
-                    
-                    document.getElementById('analysis').innerHTML = `
-                        <h3>Analysis for ${data.symbol} (${data.timeframe})</h3>
-                        <div class="recommendation ${recClass}">
-                            ${rec.recommendation} - ${rec.confidence} confidence
-                        </div>
-                        <p><strong>Bullish Probability:</strong> ${rec.bullish_prob}</p>
-                        <p><strong>Bearish Probability:</strong> ${rec.bearish_prob}</p>
-                        <p><strong>Analysis Date:</strong> ${new Date().toLocaleDateString()}</p>
-                        <p><em>Generated based on ${data.transits.length} planetary transit calculations</em></p>
-                    `;
-                })
-                .catch(error => {
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('analysis').innerHTML = '<p style="color: red;">Error generating analysis. Please try again.</p>';
-                    console.error('Error:', error);
-                });
-        });
-    </script>
-</body>
-</html>
-"""
+            with col1:
+                if 'Buy' in rec['recommendation']:
+                    st.success(f"**{rec['recommendation']}**")
+                elif 'Sell' in rec['recommendation']:
+                    st.error(f"**{rec['recommendation']}**")
+                else:
+                    st.warning(f"**{rec['recommendation']}**")
+            
+            with col2:
+                st.metric("Confidence", rec['confidence'])
+            
+            with col3:
+                st.metric("Bullish Probability", rec['bullish_prob'])
+            
+            # Display chart
+            chart = create_price_chart(analysis['price_data'], symbol.upper())
+            st.plotly_chart(chart, use_container_width=True)
+            
+            # Display detailed analysis
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("📊 Market Probabilities")
+                prob_df = analysis['probabilities'][['date', 'bullish_prob', 'bearish_prob']].copy()
+                prob_df['bullish_prob'] = (prob_df['bullish_prob'] * 100).round(1)
+                prob_df['bearish_prob'] = (prob_df['bearish_prob'] * 100).round(1)
+                prob_df['date'] = pd.to_datetime(prob_df['date']).dt.strftime('%Y-%m-%d')
+                st.dataframe(prob_df, use_container_width=True)
+            
+            with col2:
+                st.subheader("🪐 Recent Transits")
+                transit_df = analysis['transits'].head(20)[['date', 'planet', 'zodiac_sign', 'aspect']].copy()
+                transit_df['date'] = pd.to_datetime(transit_df['date']).dt.strftime('%Y-%m-%d')
+                st.dataframe(transit_df, use_container_width=True)
+            
+            # Analysis summary
+            st.subheader("📈 Analysis Summary")
+            st.info(f"""
+            **Symbol:** {analysis['symbol']}  
+            **Timeframe:** {analysis['timeframe']}  
+            **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
+            **Total Transits Analyzed:** {len(analysis['transits'])}  
+            **Current Recommendation:** {rec['recommendation']} ({rec['confidence']} confidence)
+            """)
 
-@app.route('/')
-def index():
-    return render_template_string(INDEX_TEMPLATE)
-
-@app.route('/api/analysis/<symbol>/<timeframe>')
-def get_analysis(symbol, timeframe):
-    try:
-        analyzer = AstroTradingAnalyzer()
-        analysis = analyzer.generate_analysis(symbol.upper(), timeframe)
-        return jsonify(analysis)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/health')
-def health_check():
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
-
-if __name__ == '__main__':
-    print("Starting Astrological Trading Analysis Server...")
-    print("Access the application at: http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    main()
