@@ -2,122 +2,93 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-import time
 
 # Aspect configurations
-ASPECT_SIGNALS = {
-    'conjunction': ('Neutral', 'gray'),
-    'sextile': ('Mild Bullish', 'lightgreen'),
-    'square': ('Bearish', 'pink'),
-    'trine': ('Bullish', 'green'),
-    'opposition': ('Strong Bearish', 'red')
+ASPECT_IMPACT = {
+    'conjunction': ('Neutral', 0),
+    'sextile': ('Mild Bullish', 1),
+    'square': ('Bearish', -1),
+    'trine': ('Bullish', 2),
+    'opposition': ('Strong Bearish', -2)
 }
 
-PLANET_SYMBOLS = {
-    'Sun': '☉',
-    'Moon': '☽',
-    'Mercury': '☿',
-    'Venus': '♀',
-    'Mars': '♂',
-    'Jupiter': '♃',
-    'Saturn': '♄'
-}
-
-@st.cache_data
-def generate_analysis(symbol, timeframe):
-    """Generate analysis with swing points"""
-    planets = list(PLANET_SYMBOLS.keys())
-    
-    # Timeframe setup
+def generate_swing_chart(timeframe):
+    """Generate swing chart data for the specified timeframe"""
     if timeframe == 'intraday':
-        intervals = [(datetime.now().replace(hour=9, minute=30) + timedelta(minutes=30*i)).strftime('%H:%M') 
-                    for i in range(13)]
-        dates = [f"{datetime.now().strftime('%Y-%m-%d')} {time}" for time in intervals]
+        times = [(datetime.now().replace(hour=9, minute=30) + timedelta(minutes=30*i)).strftime('%H:%M') 
+                for i in range(13)]
+        dates = [f"Today {time}" for time in times]
     else:
-        days = {'daily': 7, 'weekly': 30, 'monthly': 90}.get(timeframe, 7)
+        days = {'daily': 1, 'weekly': 7, 'monthly': 30}[timeframe]
         dates = [(datetime.now() + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(days)]
     
-    # Generate price data with swing points
-    rng = np.random.RandomState(abs(hash(symbol)) % 1000)
-    base_price = 100 + rng.uniform(-5, 5)
-    prices = []
-    swing_points = []
-    trend_dir = 1 if rng.random() > 0.5 else -1
+    # Generate random swing data (0-20 scale)
+    rng = np.random.RandomState(42)
+    swing_values = np.clip(np.cumsum(rng.normal(0, 3, len(dates)) + 10, 0, 20).astype(int)
     
+    # Generate aspects
+    aspects = []
     for i in range(len(dates)):
-        # Simulate price movement with swings
-        if i > 0 and i % (3 if timeframe == 'intraday' else 2) == 0:
-            trend_dir *= -1
-            swing_points.append(i)
-        
-        volatility = rng.normal(0, 0.003 if timeframe == 'intraday' else 0.01)
-        price_move = trend_dir * abs(rng.normal(0.005, 0.002)) + volatility
-        base_price *= (1 + price_move)
-        prices.append(round(base_price, 2))
-    
-    # Generate transits with swing markers
-    transits = []
-    for i in range(len(dates)):
-        if i in swing_points or rng.random() > 0.7:
-            aspect = rng.choice(list(ASPECT_SIGNALS.keys()))
-            signal, color = ASPECT_SIGNALS[aspect]
-            planet = rng.choice(planets)
-            
-            transits.append({
-                'Date': dates[i],
-                'Price': prices[i],
-                'Planet': planet,
-                'Symbol': PLANET_SYMBOLS[planet],
+        if i % (2 if timeframe == 'intraday' else 1) == 0:
+            aspect = rng.choice(list(ASPECT_IMPACT.keys()))
+            aspects.append({
+                'Time': dates[i],
                 'Aspect': aspect,
-                'Signal': signal,
-                'Swing': '▲' if prices[i] > (prices[i-1] if i > 0 else base_price) else '▼'
+                'Impact': ASPECT_IMPACT[aspect][1],
+                'Label': ASPECT_IMPACT[aspect][0]
             })
     
     return {
-        'symbol': symbol,
-        'timeframe': timeframe,
         'dates': dates,
-        'prices': prices,
-        'transits': transits
+        'swing_values': swing_values,
+        'aspects': aspects
     }
 
+def display_swing_chart(data, timeframe):
+    """Display the swing chart with aspects"""
+    st.subheader(f"General Astro Swing Chart - {datetime.now().strftime('%d %B %Y')}")
+    
+    # Display aspects summary
+    aspect_counts = pd.DataFrame(data['aspects'])['Label'].value_counts()
+    for label, count in aspect_counts.items():
+        st.markdown(f"- **{label}**")
+    
+    st.markdown("---")
+    
+    # Display swing chart
+    st.markdown("## Swing Index (0 to 20)")
+    chart_data = pd.DataFrame({
+        'Swing Index': data['swing_values'],
+        'Time': data['dates']
+    }).set_index('Time')
+    
+    st.line_chart(chart_data)
+    
+    # Display squared times
+    squared_times = [asp['Time'] for asp in data['aspects'] if asp['Aspect'] == 'square']
+    if squared_times:
+        st.markdown("## Squared")
+        for time in squared_times:
+            st.markdown(f"- {time}")
+
 def main():
-    st.set_page_config(page_title="🌟 Astro Swing Trader", layout="wide")
+    st.set_page_config(page_title="Astro Swing Charts", layout="wide")
     
-    # Title
-    st.title("🌟 Astrological Swing Trading Analysis")
-    st.markdown("*Price swings with planetary aspect markers*")
+    st.title("Astrological Swing Charts")
+    st.markdown("Track market swings based on planetary aspects")
     
-    # Sidebar
-    st.sidebar.header("Parameters")
-    symbol = st.sidebar.text_input("Stock Symbol", value="AAPL")
-    timeframe = st.sidebar.selectbox("Timeframe", ["intraday", "daily", "weekly", "monthly"])
+    # Timeframe selection
+    timeframe = st.radio(
+        "Select Timeframe:",
+        ["intraday", "daily", "weekly", "monthly"],
+        horizontal=True
+    )
     
-    if st.sidebar.button("Generate Analysis", type="primary"):
-        analysis = generate_analysis(symbol.upper(), timeframe)
-        
-        # Single price chart
-        st.subheader(f"{analysis['symbol']} {analysis['timeframe'].capitalize()} Price")
-        chart_data = pd.DataFrame({
-            'Price': analysis['prices']
-        }, index=analysis['dates'])
-        st.line_chart(chart_data)
-        
-        # Single planetary aspects table
-        st.subheader("🪐 Key Planetary Aspects")
-        transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Symbol', 'Aspect', 'Signal', 'Swing']]
-        st.dataframe(
-            transits_df,
-            use_container_width=True
-        )
+    if st.button("Generate Swing Chart"):
+        data = generate_swing_chart(timeframe)
+        display_swing_chart(data, timeframe)
     else:
-        st.info("👈 Enter parameters and click 'Generate Analysis'")
-        st.markdown("""
-        ### Features:
-        - Clean single price chart
-        - Planetary aspects table with trading signals
-        - Supports intraday to monthly timeframes
-        """)
+        st.info("Select a timeframe and click 'Generate Swing Chart'")
 
 if __name__ == "__main__":
     main()
