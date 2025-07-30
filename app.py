@@ -27,8 +27,6 @@ PLANET_SYMBOLS = {
 def generate_analysis(symbol, timeframe):
     """Generate analysis with swing points"""
     planets = list(PLANET_SYMBOLS.keys())
-    signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 
-             'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']
     
     # Timeframe setup
     if timeframe == 'intraday':
@@ -44,7 +42,6 @@ def generate_analysis(symbol, timeframe):
     base_price = 100 + rng.uniform(-5, 5)
     prices = []
     swing_points = []
-    last_swing = base_price
     trend_dir = 1 if rng.random() > 0.5 else -1
     
     for i in range(len(dates)):
@@ -52,7 +49,6 @@ def generate_analysis(symbol, timeframe):
         if i > 0 and i % (3 if timeframe == 'intraday' else 2) == 0:
             trend_dir *= -1
             swing_points.append(i)
-            last_swing = prices[-1] if prices else base_price
         
         volatility = rng.normal(0, 0.003 if timeframe == 'intraday' else 0.01)
         price_move = trend_dir * abs(rng.normal(0.005, 0.002)) + volatility
@@ -74,7 +70,6 @@ def generate_analysis(symbol, timeframe):
                 'Symbol': PLANET_SYMBOLS[planet],
                 'Aspect': aspect,
                 'Signal': signal,
-                'Color': color,
                 'Swing': '▲' if prices[i] > (prices[i-1] if i > 0 else base_price) else '▼'
             })
     
@@ -83,29 +78,8 @@ def generate_analysis(symbol, timeframe):
         'timeframe': timeframe,
         'dates': dates,
         'prices': prices,
-        'swings': swing_points,
         'transits': transits
     }
-
-def display_swing_chart(analysis):
-    """Display combined swing chart with markers"""
-    # Create DataFrame with both price and swing points
-    chart_data = pd.DataFrame({
-        'Price': analysis['prices'],
-        'Swing Points': [np.nan] * len(analysis['prices'])
-    }, index=analysis['dates'])
-    
-    # Mark swing points
-    for i in analysis['swings']:
-        chart_data.iloc[i, 1] = chart_data.iloc[i, 0]
-    
-    # Create a single chart with both line and markers
-    st.line_chart(chart_data['Price'])
-    
-    # Add markers for swing points
-    if not chart_data['Swing Points'].isna().all():
-        swing_data = chart_data.dropna(subset=['Swing Points'])
-        st.scatter_chart(swing_data['Swing Points'])
 
 def main():
     st.set_page_config(page_title="🌟 Astro Swing Trader", layout="wide")
@@ -118,43 +92,30 @@ def main():
     st.sidebar.header("Parameters")
     symbol = st.sidebar.text_input("Stock Symbol", value="AAPL")
     timeframe = st.sidebar.selectbox("Timeframe", ["intraday", "daily", "weekly", "monthly"])
-    live_mode = st.sidebar.checkbox("Live Simulation Mode", True) if timeframe == 'intraday' else False
     
     if st.sidebar.button("Generate Analysis", type="primary"):
-        placeholder = st.empty()
+        analysis = generate_analysis(symbol.upper(), timeframe)
         
-        if live_mode:
-            for _ in range(3):  # Simulate 3 updates for demo
-                with placeholder.container():
-                    analysis = generate_analysis(symbol.upper(), timeframe)
-                    display_swing_chart(analysis)
-                    
-                    # Transits table
-                    st.subheader("🪐 Key Planetary Aspects")
-                    transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Symbol', 'Aspect', 'Signal', 'Swing']]
-                    st.dataframe(
-                        transits_df,
-                        use_container_width=True
-                    )
-                    
-                    time.sleep(2)
-        else:
-            analysis = generate_analysis(symbol.upper(), timeframe)
-            display_swing_chart(analysis)
-            
-            # Transits table
-            st.subheader("🪐 Key Planetary Aspects")
-            transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Symbol', 'Aspect', 'Signal', 'Swing']]
-            st.dataframe(
-                transits_df,
-                use_container_width=True
-            )
+        # Single price chart
+        st.subheader(f"{analysis['symbol']} {analysis['timeframe'].capitalize()} Price")
+        chart_data = pd.DataFrame({
+            'Price': analysis['prices']
+        }, index=analysis['dates'])
+        st.line_chart(chart_data)
+        
+        # Single planetary aspects table
+        st.subheader("🪐 Key Planetary Aspects")
+        transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Symbol', 'Aspect', 'Signal', 'Swing']]
+        st.dataframe(
+            transits_df,
+            use_container_width=True
+        )
     else:
         st.info("👈 Enter parameters and click 'Generate Analysis'")
         st.markdown("""
         ### Features:
-        - Single combined price chart with swing markers
-        - Planetary aspects with trading signals
+        - Clean single price chart
+        - Planetary aspects table with trading signals
         - Supports intraday to monthly timeframes
         """)
 
