@@ -22,9 +22,9 @@ def generate_swing_chart(timeframe):
         days = {'daily': 1, 'weekly': 7, 'monthly': 30}[timeframe]
         dates = [(datetime.now() + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(days)]
     
-    # Generate random swing data (0-20 scale)
+    # Generate random swing data (0-20 scale) - FIXED THE UNCLOSED PARENTHESIS HERE
     rng = np.random.RandomState(42)
-    swing_values = np.clip(np.cumsum(rng.normal(0, 3, len(dates)) + 10, 0, 20).astype(int)
+    swing_values = np.clip(np.cumsum(rng.normal(0, 3, len(dates))) + 10, 0, 20).astype(int)
     
     # Generate aspects
     aspects = []
