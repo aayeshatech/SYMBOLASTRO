@@ -87,7 +87,7 @@ def generate_analysis(symbol, timeframe):
     }
 
 def display_swing_chart(analysis):
-    """Display swing chart using Streamlit's native line_chart with annotations"""
+    """Display swing chart using Streamlit's native charts"""
     # Create DataFrame for the chart
     chart_data = pd.DataFrame({
         'Price': analysis['prices'],
@@ -106,16 +106,22 @@ def display_swing_chart(analysis):
     if not swing_df.empty:
         st.scatter_chart(swing_df['Swing'])
     
-    # Add astrological annotations
-    for transit in analysis['transits']:
-        st.markdown(f"""
-        <div style="position: absolute; left: {20 + (analysis['dates'].index(transit['Date']) * 7}%; 
-                    top: {60 - (transit['Price'] - min(analysis['prices'])) / (max(analysis['prices']) - min(analysis['prices']) + 0.0001) * 30}%; 
-                    color: black; font-weight: bold; background-color: white; 
-                    padding: 2px; border-radius: 3px; border: 1px solid #ddd;">
-            {transit['Symbol']} {transit['Aspect']}
-        </div>
-        """, unsafe_allow_html=True)
+    # Add astrological annotations using columns
+    cols = st.columns(len(analysis['transits']))
+    for idx, transit in enumerate(analysis['transits']):
+        with cols[idx % len(cols)]:
+            st.markdown(f"""
+            <div style="text-align: center; padding: 5px; margin: 5px; 
+                        border: 1px solid #ddd; border-radius: 5px;
+                        background-color: white;">
+                <div style="font-size: 24px;">{transit['Symbol']}</div>
+                <div>{transit['Planet']}</div>
+                <div>{transit['Aspect']}</div>
+                <div style="color: {ASPECT_SIGNALS[transit['Aspect']][1]}">
+                    {transit['Signal']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
 def main():
     st.set_page_config(page_title="🌟 Astro Swing Trader", layout="wide")
