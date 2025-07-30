@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import time
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+from matplotlib.patches import FancyArrowPatch
 
 # Aspect configurations
 ASPECT_SIGNALS = {
@@ -15,13 +16,13 @@ ASPECT_SIGNALS = {
 }
 
 PLANET_COLORS = {
-    'Sun': 'gold',
-    'Moon': 'silver',
-    'Mercury': 'brown',
-    'Venus': 'orange',
-    'Mars': 'red',
-    'Jupiter': 'purple',
-    'Saturn': 'blue'
+    'Sun': '#FFD700',  # Gold
+    'Moon': '#C0C0C0', # Silver
+    'Mercury': '#8B4513',  # Brown
+    'Venus': '#FFA500',  # Orange
+    'Mars': '#FF0000',  # Red
+    'Jupiter': '#800080',  # Purple
+    'Saturn': '#0000FF'  # Blue
 }
 
 @st.cache_data
@@ -88,51 +89,42 @@ def generate_analysis(symbol, timeframe):
     }
 
 def create_swing_chart(analysis):
-    """Create interactive swing chart with astro markers"""
-    fig = go.Figure()
+    """Create swing chart with Matplotlib"""
+    fig, ax = plt.subplots(figsize=(12, 6))
     
     # Price line
-    fig.add_trace(go.Scatter(
-        x=analysis['dates'],
-        y=analysis['prices'],
-        mode='lines',
-        name='Price',
-        line=dict(color='royalblue', width=2)
-    ))
+    ax.plot(analysis['dates'], analysis['prices'], 
+           color='royalblue', linewidth=2, label='Price')
     
     # Swing points
     swing_dates = [analysis['dates'][i] for i in analysis['swings']]
     swing_prices = [analysis['prices'][i] for i in analysis['swings']]
-    fig.add_trace(go.Scatter(
-        x=swing_dates,
-        y=swing_prices,
-        mode='markers',
-        name='Swing Points',
-        marker=dict(color='red', size=10, symbol='diamond')
-    ))
+    ax.scatter(swing_dates, swing_prices, 
+              color='red', s=100, marker='D', label='Swing Points')
     
     # Astro markers
     for transit in analysis['transits']:
-        fig.add_annotation(
-            x=transit['Date'],
-            y=transit['Price'],
-            text=f"{transit['Planet']} {transit['Aspect']}",
-            showarrow=True,
-            arrowhead=1,
-            ax=0,
-            ay=-40,
-            font=dict(color=transit['Color'], size=10),
-            bgcolor='rgba(255,255,255,0.8)'
+        ax.annotate(
+            f"{transit['Planet']}\n{transit['Aspect']}",
+            xy=(transit['Date'], transit['Price']),
+            xytext=(0, -40),
+            textcoords='offset points',
+            ha='center',
+            va='bottom',
+            color=transit['Color'],
+            fontsize=10,
+            fontweight='bold',
+            bbox=dict(boxstyle='round,pad=0.5', fc='white', alpha=0.8),
+            arrowprops=dict(arrowstyle='->', color=transit['Color'])
         )
     
     # Chart styling
-    fig.update_layout(
-        title=f"{analysis['symbol']} {analysis['timeframe'].capitalize()} Price with Astro Aspects",
-        xaxis_title='Date/Time',
-        yaxis_title='Price',
-        hovermode='x unified',
-        template='plotly_white'
-    )
+    ax.set_title(f"{analysis['symbol']} {analysis['timeframe'].capitalize()} Price with Astro Aspects")
+    ax.set_xlabel('Date/Time')
+    ax.set_ylabel('Price')
+    ax.grid(True, linestyle='--', alpha=0.7)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
     
     return fig
 
@@ -157,14 +149,16 @@ def main():
                 with placeholder.container():
                     analysis = generate_analysis(symbol.upper(), timeframe)
                     fig = create_swing_chart(analysis)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.pyplot(fig)
                     
                     # Transits table
                     st.subheader("🪐 Key Planetary Aspects")
                     transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Aspect', 'Signal', 'Swing']]
                     st.dataframe(
                         transits_df.style.apply(
-                            lambda x: [f"background-color: {ASPECT_SIGNALS[x['Aspect']][1]}" if x.name == 'Signal' else '' for _, x in transits_df.iterrows()],
+                            lambda x: [f"background-color: {ASPECT_SIGNALS[x['Aspect']][1]}" 
+                                      if x.name == 'Signal' else '' 
+                                      for _, x in transits_df.iterrows()],
                             axis=1
                         ),
                         use_container_width=True
@@ -174,14 +168,16 @@ def main():
         else:
             analysis = generate_analysis(symbol.upper(), timeframe)
             fig = create_swing_chart(analysis)
-            st.plotly_chart(fig, use_container_width=True)
+            st.pyplot(fig)
             
             # Transits table
             st.subheader("🪐 Key Planetary Aspects")
             transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Aspect', 'Signal', 'Swing']]
             st.dataframe(
                 transits_df.style.apply(
-                    lambda x: [f"background-color: {ASPECT_SIGNALS[x['Aspect']][1]}" if x.name == 'Signal' else '' for _, x in transits_df.iterrows()],
+                    lambda x: [f"background-color: {ASPECT_SIGNALS[x['Aspect']][1]}" 
+                              if x.name == 'Signal' else '' 
+                              for _, x in transits_df.iterrows()],
                     axis=1
                 ),
                 use_container_width=True
