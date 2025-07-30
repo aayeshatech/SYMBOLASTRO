@@ -88,34 +88,31 @@ def generate_analysis(symbol, timeframe):
     }
 
 def display_swing_chart(analysis):
-    """Display swing chart using Streamlit's native charts"""
-    # Create DataFrame for the chart
+    """Display combined swing chart with markers"""
+    # Create DataFrame with both price and swing points
     chart_data = pd.DataFrame({
         'Price': analysis['prices'],
-        'Swing': [np.nan] * len(analysis['prices'])
+        'Swing Points': [np.nan] * len(analysis['prices'])
     }, index=analysis['dates'])
     
     # Mark swing points
     for i in analysis['swings']:
         chart_data.iloc[i, 1] = chart_data.iloc[i, 0]
     
-    # Display the main chart
+    # Create a single chart with both line and markers
     st.line_chart(chart_data['Price'])
     
-    # Add swing point markers
-    swing_df = chart_data.dropna(subset=['Swing'])
-    if not swing_df.empty:
-        st.scatter_chart(swing_df['Swing'])
-
-def color_row(row):
-    return [f'background-color: {row["Color"]}; color: white'] * len(row)
+    # Add markers for swing points
+    if not chart_data['Swing Points'].isna().all():
+        swing_data = chart_data.dropna(subset=['Swing Points'])
+        st.scatter_chart(swing_data['Swing Points'])
 
 def main():
     st.set_page_config(page_title="🌟 Astro Swing Trader", layout="wide")
     
     # Title
     st.title("🌟 Astrological Swing Trading Analysis")
-    st.markdown("*Dynamic price swings with planetary aspect markers*")
+    st.markdown("*Price swings with planetary aspect markers*")
     
     # Sidebar
     st.sidebar.header("Parameters")
@@ -156,9 +153,9 @@ def main():
         st.info("👈 Enter parameters and click 'Generate Analysis'")
         st.markdown("""
         ### Features:
-        - **Swing Analysis**: Automatic pivot point detection
-        - **Planetary Markers**: Astrological symbols and aspects
-        - **Timeframe Support**: Intraday to monthly analysis
+        - Single combined price chart with swing markers
+        - Planetary aspects with trading signals
+        - Supports intraday to monthly timeframes
         """)
 
 if __name__ == "__main__":
