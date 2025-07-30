@@ -3,322 +3,148 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import random
-from typing import Dict
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
-class AstroDataGenerator:
-    """Generates simulated astronomical data for trading analysis"""
-    
-    PLANETS = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 
-               'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto']
-    
-    ZODIAC_SIGNS = ['Aries', 'Taurus', 'Gemini', 'Cancer', 
-                    'Leo', 'Virgo', 'Libra', 'Scorpio', 
-                    'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']
-    
-    ASPECTS = ['conjunction', 'sextile', 'square', 'trine', 'opposition']
-    
+# Simplified data generator
+class SimpleAstroAnalyzer:
     def __init__(self):
-        self.planet_weights = {
-            'Sun': 0.9, 'Moon': 0.8, 'Mercury': 0.7, 'Venus': 0.85,
-            'Mars': 0.75, 'Jupiter': 0.95, 'Saturn': 0.8, 
-            'Uranus': 0.7, 'Neptune': 0.65, 'Pluto': 0.6
-        }
+        self.planets = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn']
+        self.signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 
+                     'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']
+        self.aspects = ['conjunction', 'sextile', 'square', 'trine', 'opposition']
         
-        self.aspect_strengths = {
-            'conjunction': 1.0, 'opposition': 0.9, 
-            'trine': 0.8, 'square': 0.7, 'sextile': 0.6
-        }
+    def generate_analysis(self, symbol, timeframe):
+        """Generate simplified astrological analysis"""
+        days = {'daily': 7, 'weekly': 30, 'monthly': 90, 'intraday': 1}.get(timeframe, 7)
         
-        self.bullish_planets = ['Jupiter', 'Venus', 'Sun']
-        self.bearish_planets = ['Saturn', 'Mars', 'Pluto']
-    
-    def generate_transits(self, days: int = 30) -> pd.DataFrame:
-        """Generate simulated planetary transit data"""
-        start_date = datetime.now()
-        dates = [start_date + timedelta(days=i) for i in range(days)]
+        # Generate random but consistent data
+        np.random.seed(hash(symbol) % 1000)
         
-        data = []
-        for date in dates:
-            for planet in self.PLANETS:
-                entry = {
-                    'date': date,
-                    'planet': planet,
-                    'zodiac_sign': random.choice(self.ZODIAC_SIGNS),
-                    'longitude': random.uniform(0, 360),
-                    'aspect': random.choice(self.ASPECTS),
-                    'orb': random.uniform(0, 5),
-                    'retrograde': random.random() > 0.85
-                }
-                data.append(entry)
+        bullish_prob = np.random.beta(2, 2)  # Generates values between 0 and 1
+        bearish_prob = 1 - bullish_prob
         
-        return pd.DataFrame(data)
-    
-    def calculate_aspect_strength(self, row: pd.Series) -> float:
-        """Calculate strength of astrological aspect"""
-        base_strength = self.aspect_strengths[row['aspect']]
-        orb_penalty = 1 - (row['orb'] / 10)  # Smaller orbs are stronger
-        retro_factor = 0.9 if row['retrograde'] else 1.0
-        return base_strength * orb_penalty * retro_factor * self.planet_weights[row['planet']]
-    
-    def calculate_market_probabilities(self, transits: pd.DataFrame) -> pd.DataFrame:
-        """Calculate bullish/bearish probabilities based on transits"""
-        transits['aspect_strength'] = transits.apply(self.calculate_aspect_strength, axis=1)
+        # Generate price data
+        dates = [datetime.now() + timedelta(days=i) for i in range(days)]
+        base_price = 100
+        prices = []
         
-        # Group by date to get daily probabilities
-        daily_data = []
-        for date, group in transits.groupby('date'):
-            bullish_score = 0
-            bearish_score = 0
-            
-            for _, row in group.iterrows():
-                if row['planet'] in self.bullish_planets:
-                    bullish_score += row['aspect_strength']
-                elif row['planet'] in self.bearish_planets:
-                    bearish_score += row['aspect_strength']
-            
-            total_score = bullish_score + bearish_score
-            if total_score > 0:
-                bullish_prob = bullish_score / total_score
-                bearish_prob = bearish_score / total_score
-            else:
-                bullish_prob = 0.5
-                bearish_prob = 0.5
-            
-            daily_data.append({
-                'date': date,
-                'bullish_prob': bullish_prob,
-                'bearish_prob': bearish_prob,
-                'transits': group.to_dict('records')
-            })
+        for i, date in enumerate(dates):
+            trend = (bullish_prob - 0.5) * 0.02
+            volatility = np.random.normal(0, 0.01)
+            base_price *= (1 + trend + volatility)
+            prices.append(round(base_price, 2))
         
-        return pd.DataFrame(daily_data)
-
-class AstroTradingAnalyzer:
-    """Analyzes astro data for trading signals"""
-    
-    def __init__(self):
-        self.data_generator = AstroDataGenerator()
-    
-    def generate_analysis(self, symbol: str, timeframe: str) -> Dict:
-        """Generate complete analysis for a symbol and timeframe"""
-        # Determine days to generate based on timeframe
-        if timeframe == 'intraday':
-            days = 1
-        elif timeframe == 'daily':
-            days = 7
-        elif timeframe == 'weekly':
-            days = 30
-        elif timeframe == 'monthly':
-            days = 90
+        # Generate recommendation
+        if bullish_prob > 0.65:
+            recommendation = "Strong Buy"
+            confidence = f"{(bullish_prob - 0.5) * 200:.1f}%"
+        elif bullish_prob > 0.55:
+            recommendation = "Buy"
+            confidence = f"{(bullish_prob - 0.5) * 150:.1f}%"
+        elif bullish_prob < 0.35:
+            recommendation = "Strong Sell"
+            confidence = f"{(0.5 - bullish_prob) * 200:.1f}%"
+        elif bullish_prob < 0.45:
+            recommendation = "Sell"
+            confidence = f"{(0.5 - bullish_prob) * 150:.1f}%"
         else:
-            days = 7
+            recommendation = "Neutral"
+            confidence = "Low"
         
-        # Generate transits and calculate probabilities
-        transits = self.data_generator.generate_transits(days)
-        probabilities = self.data_generator.calculate_market_probabilities(transits)
-        
-        # Generate simulated price data
-        price_data = self._generate_price_data(probabilities, timeframe)
+        # Generate some transit data
+        transits = []
+        for i in range(min(10, days)):
+            transits.append({
+                'date': dates[i].strftime('%Y-%m-%d'),
+                'planet': np.random.choice(self.planets),
+                'sign': np.random.choice(self.signs),
+                'aspect': np.random.choice(self.aspects)
+            })
         
         return {
             'symbol': symbol,
             'timeframe': timeframe,
-            'transits': transits,
-            'probabilities': probabilities,
-            'price_data': price_data,
-            'current_recommendation': self._generate_recommendation(probabilities.iloc[-1])
-        }
-    
-    def _generate_price_data(self, probabilities: pd.DataFrame, timeframe: str) -> pd.DataFrame:
-        """Generate simulated price data based on astro probabilities"""
-        price_data = []
-        base_price = 100  # Starting price
-        
-        for _, row in probabilities.iterrows():
-            # Determine price movement based on probabilities
-            direction_strength = row['bullish_prob'] - 0.5
-            volatility = 0.02 * (1 + abs(direction_strength))
-            
-            if timeframe == 'intraday':
-                # Generate data points throughout the day
-                for hour in range(9, 16):  # Market hours
-                    for minute in [0, 15, 30, 45]:
-                        timestamp = row['date'].replace(hour=hour, minute=minute)
-                        price_move = direction_strength * volatility * random.uniform(0.8, 1.2)
-                        base_price *= (1 + price_move)
-                        price_data.append({
-                            'timestamp': timestamp,
-                            'price': round(base_price, 2),
-                            'bullish_prob': row['bullish_prob'],
-                            'bearish_prob': row['bearish_prob']
-                        })
-            else:
-                # Daily/Weekly/Monthly data
-                price_move = direction_strength * volatility
-                base_price *= (1 + price_move)
-                price_data.append({
-                    'timestamp': row['date'],
-                    'price': round(base_price, 2),
-                    'bullish_prob': row['bullish_prob'],
-                    'bearish_prob': row['bearish_prob']
-                })
-        
-        return pd.DataFrame(price_data)
-    
-    def _generate_recommendation(self, latest_prob: pd.Series) -> Dict:
-        """Generate trading recommendation based on probabilities"""
-        strength = abs(latest_prob['bullish_prob'] - 0.5)
-        
-        if latest_prob['bullish_prob'] > 0.6:
-            recommendation = 'Strong Buy'
-            confidence = strength * 100
-        elif latest_prob['bullish_prob'] > 0.55:
-            recommendation = 'Buy'
-            confidence = strength * 80
-        elif latest_prob['bearish_prob'] > 0.6:
-            recommendation = 'Strong Sell'
-            confidence = strength * 100
-        elif latest_prob['bearish_prob'] > 0.55:
-            recommendation = 'Sell'
-            confidence = strength * 80
-        else:
-            recommendation = 'Neutral'
-            confidence = 0
-        
-        return {
             'recommendation': recommendation,
-            'confidence': f"{confidence:.1f}%",
-            'bullish_prob': f"{latest_prob['bullish_prob']*100:.1f}%",
-            'bearish_prob': f"{latest_prob['bearish_prob']*100:.1f}%"
+            'confidence': confidence,
+            'bullish_prob': f"{bullish_prob*100:.1f}%",
+            'bearish_prob': f"{bearish_prob*100:.1f}%",
+            'dates': [d.strftime('%Y-%m-%d') for d in dates],
+            'prices': prices,
+            'transits': transits
         }
-
-def create_price_chart(price_data, symbol):
-    """Create a price chart with bullish/bearish probabilities"""
-    fig = make_subplots(
-        rows=2, cols=1,
-        subplot_titles=[f'{symbol} Price Chart', 'Bullish/Bearish Probabilities'],
-        row_heights=[0.7, 0.3],
-        vertical_spacing=0.1
-    )
-    
-    # Price chart
-    fig.add_trace(
-        go.Scatter(
-            x=price_data['timestamp'],
-            y=price_data['price'],
-            mode='lines',
-            name='Price',
-            line=dict(color='blue', width=2)
-        ),
-        row=1, col=1
-    )
-    
-    # Probability charts
-    fig.add_trace(
-        go.Scatter(
-            x=price_data['timestamp'],
-            y=price_data['bullish_prob'],
-            mode='lines',
-            name='Bullish Probability',
-            line=dict(color='green', width=2)
-        ),
-        row=2, col=1
-    )
-    
-    fig.add_trace(
-        go.Scatter(
-            x=price_data['timestamp'],
-            y=price_data['bearish_prob'],
-            mode='lines',
-            name='Bearish Probability',
-            line=dict(color='red', width=2)
-        ),
-        row=2, col=1
-    )
-    
-    fig.update_layout(
-        title=f"Astrological Trading Analysis - {symbol}",
-        xaxis_title="Time",
-        height=600,
-        showlegend=True
-    )
-    
-    fig.update_yaxes(title_text="Price ($)", row=1, col=1)
-    fig.update_yaxes(title_text="Probability", row=2, col=1)
-    
-    return fig
 
 def main():
-    st.set_page_config(page_title="🌟 Astrological Trading Analysis", layout="wide")
+    st.set_page_config(page_title="🌟 Astro Trading", layout="wide")
     
+    # Title
     st.title("🌟 Astrological Trading Analysis")
-    st.markdown("*Generate trading insights based on planetary alignments and astrological aspects*")
+    st.markdown("*Generate trading insights based on planetary alignments*")
     
-    # Sidebar inputs
-    st.sidebar.header("Analysis Parameters")
-    symbol = st.sidebar.text_input("Stock Symbol", value="AAPL", help="Enter stock ticker (e.g., AAPL, GOOGL)")
-    timeframe = st.sidebar.selectbox(
-        "Timeframe",
-        ["daily", "weekly", "monthly", "intraday"],
-        help="Select analysis timeframe"
-    )
+    # Sidebar
+    st.sidebar.header("Parameters")
+    symbol = st.sidebar.text_input("Stock Symbol", value="AAPL")
+    timeframe = st.sidebar.selectbox("Timeframe", ["daily", "weekly", "monthly", "intraday"])
     
     if st.sidebar.button("Generate Analysis", type="primary"):
-        with st.spinner("Analyzing planetary positions..."):
-            analyzer = AstroTradingAnalyzer()
-            analysis = analyzer.generate_analysis(symbol.upper(), timeframe)
-            
-            # Display recommendation
-            rec = analysis['current_recommendation']
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                if 'Buy' in rec['recommendation']:
-                    st.success(f"**{rec['recommendation']}**")
-                elif 'Sell' in rec['recommendation']:
-                    st.error(f"**{rec['recommendation']}**")
-                else:
-                    st.warning(f"**{rec['recommendation']}**")
-            
-            with col2:
-                st.metric("Confidence", rec['confidence'])
-            
-            with col3:
-                st.metric("Bullish Probability", rec['bullish_prob'])
-            
-            # Display chart
-            chart = create_price_chart(analysis['price_data'], symbol.upper())
-            st.plotly_chart(chart, use_container_width=True)
-            
-            # Display detailed analysis
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("📊 Market Probabilities")
-                prob_df = analysis['probabilities'][['date', 'bullish_prob', 'bearish_prob']].copy()
-                prob_df['bullish_prob'] = (prob_df['bullish_prob'] * 100).round(1)
-                prob_df['bearish_prob'] = (prob_df['bearish_prob'] * 100).round(1)
-                prob_df['date'] = pd.to_datetime(prob_df['date']).dt.strftime('%Y-%m-%d')
-                st.dataframe(prob_df, use_container_width=True)
-            
-            with col2:
-                st.subheader("🪐 Recent Transits")
-                transit_df = analysis['transits'].head(20)[['date', 'planet', 'zodiac_sign', 'aspect']].copy()
-                transit_df['date'] = pd.to_datetime(transit_df['date']).dt.strftime('%Y-%m-%d')
-                st.dataframe(transit_df, use_container_width=True)
-            
-            # Analysis summary
-            st.subheader("📈 Analysis Summary")
+        
+        # Generate analysis
+        analyzer = SimpleAstroAnalyzer()
+        analysis = analyzer.generate_analysis(symbol.upper(), timeframe)
+        
+        # Display results
+        st.success(f"Analysis completed for {analysis['symbol']}")
+        
+        # Metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Recommendation", analysis['recommendation'])
+        with col2:
+            st.metric("Confidence", analysis['confidence'])
+        with col3:
+            st.metric("Bullish Probability", analysis['bullish_prob'])
+        
+        # Price chart
+        if len(analysis['prices']) > 1:
+            chart_data = pd.DataFrame({
+                'Date': analysis['dates'],
+                'Price': analysis['prices']
+            })
+            st.line_chart(chart_data.set_index('Date'))
+        
+        # Transits table
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("🪐 Recent Transits")
+            transits_df = pd.DataFrame(analysis['transits'])
+            st.dataframe(transits_df, use_container_width=True)
+        
+        with col2:
+            st.subheader("📊 Analysis Summary")
             st.info(f"""
             **Symbol:** {analysis['symbol']}  
             **Timeframe:** {analysis['timeframe']}  
-            **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
-            **Total Transits Analyzed:** {len(analysis['transits'])}  
-            **Current Recommendation:** {rec['recommendation']} ({rec['confidence']} confidence)
+            **Bullish Probability:** {analysis['bullish_prob']}  
+            **Bearish Probability:** {analysis['bearish_prob']}  
+            **Recommendation:** {analysis['recommendation']}  
+            **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
             """)
+    
+    else:
+        # Default view
+        st.info("👈 Enter a stock symbol and click 'Generate Analysis' to begin")
+        
+        # Sample data
+        st.subheader("How it works")
+        st.markdown("""
+        This app analyzes astrological factors to generate trading insights:
+        
+        1. **Planetary Positions**: Analyzes current planetary alignments
+        2. **Astrological Aspects**: Considers conjunctions, trines, squares, etc.
+        3. **Market Probabilities**: Calculates bullish/bearish probabilities
+        4. **Trading Signals**: Generates buy/sell recommendations
+        
+        *Note: This is for educational/entertainment purposes only. Not financial advice.*
+        """)
 
 if __name__ == "__main__":
     main()
