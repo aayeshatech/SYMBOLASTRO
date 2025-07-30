@@ -2,162 +2,199 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+import time
+import plotly.graph_objects as go
 
-# Aspect to trading signal mapping
+# Aspect configurations
 ASPECT_SIGNALS = {
-    'conjunction': 'Neutral',
-    'sextile': 'Mild Bullish',
-    'square': 'Bearish',
-    'trine': 'Bullish',
-    'opposition': 'Strong Bearish'
+    'conjunction': ('Neutral', 'gray'),
+    'sextile': ('Mild Bullish', 'lightgreen'),
+    'square': ('Bearish', 'pink'),
+    'trine': ('Bullish', 'green'),
+    'opposition': ('Strong Bearish', 'red')
 }
 
-# Color mapping for signals
-SIGNAL_COLORS = {
-    'Neutral': 'gray',
-    'Mild Bullish': 'lightgreen',
-    'Bullish': 'green',
-    'Bearish': 'pink',
-    'Strong Bearish': 'red',
-    'Strong Buy': 'darkgreen',
-    'Buy': 'green',
-    'Sell': 'red',
-    'Strong Sell': 'darkred'
+PLANET_COLORS = {
+    'Sun': 'gold',
+    'Moon': 'silver',
+    'Mercury': 'brown',
+    'Venus': 'orange',
+    'Mars': 'red',
+    'Jupiter': 'purple',
+    'Saturn': 'blue'
 }
 
 @st.cache_data
 def generate_analysis(symbol, timeframe):
-    """Generate simplified astrological analysis"""
-    planets = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn']
+    """Generate analysis with swing points"""
+    planets = list(PLANET_COLORS.keys())
     signs = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 
              'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces']
     
+    # Timeframe setup
     if timeframe == 'intraday':
-        intervals = ['09:30', '10:00', '10:30', '11:00', '11:30', 
-                    '12:00', '12:30', '13:00', '13:30', '14:00',
-                    '14:30', '15:00', '15:30', '16:00']
+        intervals = [(datetime.now().replace(hour=9, minute=30) + timedelta(minutes=30*i)).strftime('%H:%M') 
+                    for i in range(13)]
         dates = [f"{datetime.now().strftime('%Y-%m-%d')} {time}" for time in intervals]
-        days = 1
     else:
         days = {'daily': 7, 'weekly': 30, 'monthly': 90}.get(timeframe, 7)
-        dates = [datetime.now() + timedelta(days=i) for i in range(days)]
-        intervals = None
+        dates = [(datetime.now() + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(days)]
     
+    # Generate price data with swing points
     rng = np.random.RandomState(abs(hash(symbol)) % 1000)
-    bullish_prob = rng.beta(2, 2)
-    bearish_prob = 1 - bullish_prob
-    
-    # Generate price data
-    base_price = 100
+    base_price = 100 + rng.uniform(-5, 5)
     prices = []
+    swing_points = []
+    last_swing = base_price
+    trend_dir = 1 if rng.random() > 0.5 else -1
+    
     for i in range(len(dates)):
-        trend = (bullish_prob - 0.5) * (0.005 if timeframe == 'intraday' else 0.02)
+        # Simulate price movement with swings
+        if i > 0 and i % (3 if timeframe == 'intraday' else 2) == 0:
+            trend_dir *= -1
+            swing_points.append(i)
+            last_swing = prices[-1] if prices else base_price
+        
         volatility = rng.normal(0, 0.003 if timeframe == 'intraday' else 0.01)
-        base_price *= (1 + trend + volatility)
+        price_move = trend_dir * abs(rng.normal(0.005, 0.002)) + volatility
+        base_price *= (1 + price_move)
         prices.append(round(base_price, 2))
     
-    # Generate recommendation
-    if bullish_prob > 0.65:
-        recommendation = "Strong Buy"
-        confidence = f"{(bullish_prob - 0.5) * 200:.1f}%"
-    elif bullish_prob > 0.55:
-        recommendation = "Buy"
-        confidence = f"{(bullish_prob - 0.5) * 150:.1f}%"
-    elif bullish_prob < 0.35:
-        recommendation = "Strong Sell"
-        confidence = f"{(0.5 - bullish_prob) * 200:.1f}%"
-    elif bullish_prob < 0.45:
-        recommendation = "Sell"
-        confidence = f"{(0.5 - bullish_prob) * 150:.1f}%"
-    else:
-        recommendation = "Neutral"
-        confidence = "Low"
-    
-    # Generate transit data
+    # Generate transits with swing markers
     transits = []
-    num_transits = len(intervals) if timeframe == 'intraday' else min(10, days)
-    
-    for i in range(num_transits):
-        aspect = rng.choice(list(ASPECT_SIGNALS.keys()))
-        signal = ASPECT_SIGNALS[aspect]
-        
-        transits.append({
-            'Date': dates[i] if timeframe == 'intraday' else dates[i].strftime('%Y-%m-%d'),
-            'Planet': rng.choice(planets),
-            'Sign': rng.choice(signs),
-            'Aspect': aspect,
-            'Signal': signal
-        })
+    for i in range(len(dates)):
+        if i in swing_points or rng.random() > 0.7:
+            aspect = rng.choice(list(ASPECT_SIGNALS.keys()))
+            signal, color = ASPECT_SIGNALS[aspect]
+            planet = rng.choice(planets)
+            
+            transits.append({
+                'Date': dates[i],
+                'Price': prices[i],
+                'Planet': planet,
+                'Aspect': aspect,
+                'Signal': signal,
+                'Color': PLANET_COLORS[planet],
+                'Swing': '▲' if prices[i] > (prices[i-1] if i > 0 else base_price) else '▼'
+            })
     
     return {
         'symbol': symbol,
         'timeframe': timeframe,
-        'recommendation': recommendation,
-        'confidence': confidence,
-        'bullish_prob': f"{bullish_prob*100:.1f}%",
-        'bearish_prob': f"{bearish_prob*100:.1f}%",
         'dates': dates,
         'prices': prices,
+        'swings': swing_points,
         'transits': transits
     }
 
-def color_signal(val):
-    color = SIGNAL_COLORS.get(val, 'white')
-    return f'background-color: {color}; color: white; font-weight: bold;'
+def create_swing_chart(analysis):
+    """Create interactive swing chart with astro markers"""
+    fig = go.Figure()
+    
+    # Price line
+    fig.add_trace(go.Scatter(
+        x=analysis['dates'],
+        y=analysis['prices'],
+        mode='lines',
+        name='Price',
+        line=dict(color='royalblue', width=2)
+    ))
+    
+    # Swing points
+    swing_dates = [analysis['dates'][i] for i in analysis['swings']]
+    swing_prices = [analysis['prices'][i] for i in analysis['swings']]
+    fig.add_trace(go.Scatter(
+        x=swing_dates,
+        y=swing_prices,
+        mode='markers',
+        name='Swing Points',
+        marker=dict(color='red', size=10, symbol='diamond')
+    ))
+    
+    # Astro markers
+    for transit in analysis['transits']:
+        fig.add_annotation(
+            x=transit['Date'],
+            y=transit['Price'],
+            text=f"{transit['Planet']} {transit['Aspect']}",
+            showarrow=True,
+            arrowhead=1,
+            ax=0,
+            ay=-40,
+            font=dict(color=transit['Color'], size=10),
+            bgcolor='rgba(255,255,255,0.8)'
+        )
+    
+    # Chart styling
+    fig.update_layout(
+        title=f"{analysis['symbol']} {analysis['timeframe'].capitalize()} Price with Astro Aspects",
+        xaxis_title='Date/Time',
+        yaxis_title='Price',
+        hovermode='x unified',
+        template='plotly_white'
+    )
+    
+    return fig
 
 def main():
-    st.set_page_config(page_title="🌟 Astro Trading Pro", layout="wide")
+    st.set_page_config(page_title="🌟 Astro Swing Trader", layout="wide")
     
     # Title
-    st.title("🌟 Advanced Astrological Trading Analysis")
-    st.markdown("*Intraday and positional trading signals based on planetary aspects*")
+    st.title("🌟 Astrological Swing Trading Analysis")
+    st.markdown("*Dynamic price swings with planetary aspect markers*")
     
     # Sidebar
     st.sidebar.header("Parameters")
     symbol = st.sidebar.text_input("Stock Symbol", value="AAPL")
     timeframe = st.sidebar.selectbox("Timeframe", ["intraday", "daily", "weekly", "monthly"])
+    live_mode = st.sidebar.checkbox("Live Simulation Mode", True) if timeframe == 'intraday' else False
     
     if st.sidebar.button("Generate Analysis", type="primary"):
-        with st.spinner("🔮 Analyzing planetary alignments..."):
+        placeholder = st.empty()
+        
+        if live_mode:
+            for _ in range(3):  # Simulate 3 updates for demo
+                with placeholder.container():
+                    analysis = generate_analysis(symbol.upper(), timeframe)
+                    fig = create_swing_chart(analysis)
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Transits table
+                    st.subheader("🪐 Key Planetary Aspects")
+                    transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Aspect', 'Signal', 'Swing']]
+                    st.dataframe(
+                        transits_df.style.apply(
+                            lambda x: [f"background-color: {ASPECT_SIGNALS[x['Aspect']][1]}" if x.name == 'Signal' else '' for _, x in transits_df.iterrows()],
+                            axis=1
+                        ),
+                        use_container_width=True
+                    )
+                    
+                    time.sleep(2)  # Simulate live updates
+        else:
             analysis = generate_analysis(symbol.upper(), timeframe)
-        
-        st.success(f"Analysis completed for {analysis['symbol']} ({analysis['timeframe']})")
-        
-        # Metrics
-        cols = st.columns(3)
-        cols[0].metric("Recommendation", analysis['recommendation'])
-        cols[1].metric("Confidence Level", analysis['confidence'])
-        cols[2].metric("Bullish Probability", analysis['bullish_prob'])
-        
-        # Price chart
-        st.subheader(f"📈 {'Intraday' if timeframe == 'intraday' else 'Historical'} Price Movement")
-        chart_data = pd.DataFrame({'Price': analysis['prices']}, index=analysis['dates'])
-        st.line_chart(chart_data)
-        
-        # Transits table
-        st.subheader("🪐 Planetary Aspects & Trading Signals")
-        transits_df = pd.DataFrame(analysis['transits'])
-        
-        # Apply styling only to Signal column
-        styled_df = transits_df.style.applymap(color_signal, subset=['Signal'])
-        
-        st.dataframe(
-            styled_df,
-            use_container_width=True,
-            hide_index=True,
-            column_order=['Date', 'Planet', 'Sign', 'Aspect', 'Signal']
-        )
-        
-        # Analysis summary
-        st.subheader("📊 Analysis Summary")
-        st.info(f"""
-        **Symbol:** {analysis['symbol']}  
-        **Timeframe:** {analysis['timeframe']}  
-        **Bullish Probability:** {analysis['bullish_prob']}  
-        **Bearish Probability:** {analysis['bearish_prob']}  
-        **Recommendation:** {analysis['recommendation']}  
-        **Confidence:** {analysis['confidence']}  
-        **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
+            fig = create_swing_chart(analysis)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Transits table
+            st.subheader("🪐 Key Planetary Aspects")
+            transits_df = pd.DataFrame(analysis['transits'])[['Date', 'Planet', 'Aspect', 'Signal', 'Swing']]
+            st.dataframe(
+                transits_df.style.apply(
+                    lambda x: [f"background-color: {ASPECT_SIGNALS[x['Aspect']][1]}" if x.name == 'Signal' else '' for _, x in transits_df.iterrows()],
+                    axis=1
+                ),
+                use_container_width=True
+            )
+    else:
+        st.info("👈 Enter parameters and click 'Generate Analysis'")
+        st.image("https://via.placeholder.com/800x300?text=Astro+Swing+Trader", use_column_width=True)
+        st.markdown("""
+        ### Features:
+        - **Dynamic Swing Charts**: Visualize price swings with astrological markers
+        - **Intraday Mode**: Live simulation with 30-minute intervals
+        - **Planetary Aspects**: Marked directly on price chart
+        - **Swing Signals**: Diamond markers show pivot points
         """)
 
 if __name__ == "__main__":
