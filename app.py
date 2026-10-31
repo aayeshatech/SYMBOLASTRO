@@ -3,38 +3,86 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from io import BytesIO
+from market_feed import nse_equity_master, yahoo_cash_candles
 
 st.set_page_config(page_title="Aayeshatech Astro Analysis and Chart Education", layout="wide")
 st.title("Aayeshatech Astro Analysis and Chart Education")
-st.caption("Universal NSE sector and symbol scanner • genuine uploaded prices only • Asia/Kolkata")
+st.caption("Universal NSE sector and symbol scanner • official NSE equity master + Yahoo cash candles or CSV • Asia/Kolkata")
 
 SECTORS = ["Private Banks","PSU Banks","Small Finance Banks","NBFC","Insurance","Broking","Housing Finance","IT","Pharma","Hospitals","Diagnostics","FMCG","Retail","Consumer Durables","Auto","Auto Ancillaries","Tyres","Metals","Mining","Oil & Gas","Power","Renewables","Realty","Cement","Infrastructure","Capital Goods","Engineering","Defence","Chemicals","Fertilizers","Sugar","Tea","Textiles","Paper","Packaging","Telecom","Media","Shipping","Logistics","Aviation","Railways","Other"]
-st.info("No simulated market prices or random planetary signals. Upload timestamped OHLCV and sector mapping. Missing data are explicitly marked UNAVAILABLE.")
+st.info("No simulated prices or planetary signals. Auto mode loads NSE cash symbols and best-effort Yahoo candles; futures require contract-specific data.")
 with st.expander("Required CSV formats", expanded=False):
     st.code("symbol,sector\nRELIANCE,Oil & Gas\nTCS,IT\nHDFCBANK,Private Banks", language="csv")
     st.code("datetime,symbol,open,high,low,close,volume,instrument,expiry\n2026-10-30 09:15:00,RELIANCE,1200,1203,1195,1198,10000,FUTURES,2026-11-26", language="csv")
     st.code("datetime,planet,sign,nakshatra,pada,sign_lord,star_lord,sub_lord,aspect\n2026-11-02 12:50:19,Moon,Cancer,Ashlesha,2,Moon,Mercury,Sun,", language="csv")
-master_file = st.file_uploader("Sector/symbol master CSV (all NSE symbols)", type="csv", key="master")
-prices_file = st.file_uploader("Timestamped OHLCV CSV (cash and futures kept separate)", type="csv", key="prices")
+mode=st.radio("Market data source",["Automatic NSE + Yahoo (cash)","Uploaded CSV"],horizontal=True)
+master_file = None
+prices_file = None
+if mode == "Uploaded CSV":
+    master_file = st.file_uploader("Sector/symbol master CSV", type="csv", key="master")
+    prices_file = st.file_uploader("Timestamped OHLCV CSV", type="csv", key="prices")
+else:
+    @st.cache_data(ttl=86400,show_spinner=False)
+    def get_nse_master():
+        return nse_equity_master()
+    @st.cache_data(ttl=900,show_spinner=False)
+    def get_yahoo(symbols,period,interval):
+        return yahoo_cash_candles(symbols,period,interval)
+    try:
+        auto_master=get_nse_master()
+        st.success(f"NSE equity master loaded: {len(auto_master)} EQ symbols (not futures).")
+    except Exception as e:
+        st.error(f"Automatic NSE master unavailable: {e}. Upload CSV instead.")
+        auto_master=None
+    sectors_csv=st.file_uploader("Optional accurate symbol-to-sector CSV (symbol,sector)",type="csv",key="sector_map")
+    if auto_master is not None and sectors_csv is not None:
+        sectors=pd.read_csv(sectors_csv,dtype=str)
+        sectors.columns=sectors.columns.str.strip().str.lower()
+        if {"symbol","sector"}.issubset(sectors.columns):
+            sectors["symbol"]=sectors.symbol.str.upper().str.strip()
+            auto_master=auto_master.drop(columns="sector").merge(
+                sectors[["symbol","sector"]].drop_duplicates("symbol"),on="symbol",how="left")
+            auto_master["sector"]=auto_master.sector.fillna("Unclassified")
+    if auto_master is not None:
+        choice=st.selectbox("Select symbols to fetch",["Manual ticker selection","All symbols (slow, rate limits possible)"])
+        if choice=="All symbols (slow, rate limits possible)":
+            selected=auto_master.symbol.tolist()
+            st.warning("Full NSE fetch may take a long time or be rate-limited. Data gaps are expected; no guaranteed continuous coverage.")
+        else:
+            defaults=[s for s in ["RELIANCE","TCS","INFY","HDFCBANK","ICICIBANK","SBIN"] if s in set(auto_master.symbol)]
+            selected=st.multiselect("Select NSE cash symbols",auto_master.symbol.tolist(),default=defaults)
+        interval=st.selectbox("Candle interval",["1d","1h","30m","15m","5m"])
+        period=st.selectbox("History",["5d","1mo","3mo","6mo","1y"],index=1)
+        if interval!="1d" and period in ["3mo","6mo","1y"]:
+            st.warning("Yahoo intraday history is limited. Choose 5d or 1mo.")
+            period="1mo"
+        if st.button("Fetch selected Yahoo candles",type="primary"):
+            with st.spinner("Fetching actual Yahoo cash candles..."):
+                st.session_state["auto_candles"]=get_yahoo(tuple(selected),period,interval)
+                st.session_state["auto_selection"]=tuple(selected)
+        if "auto_candles" in st.session_state and st.session_state.get("auto_selection")==tuple(selected):
+            auto_prices=st.session_state["auto_candles"]
+            st.caption(f"Yahoo returned {len(auto_prices)} actual candles across {auto_prices.symbol.nunique() if len(auto_prices) else 0} symbols. Source may be delayed.")
+        else:
+            auto_prices=None
+
 events_file = st.file_uploader("Verified Lahiri / KP event calendar CSV (optional)", type="csv", key="events")
-
-if master_file is None or prices_file is None:
-    st.subheader("Scanner coverage")
-    st.metric("Supported sector groups", len(SECTORS))
-    st.write(", ".join(SECTORS))
-    st.warning("Scanner awaits a complete NSE symbol master and real OHLCV data. Live NSE-wide coverage is not active.")
+if mode=="Uploaded CSV" and (master_file is None or prices_file is None):
+    st.warning("Upload both NSE symbol master and timestamped candles.")
     st.stop()
-
+if mode!="Uploaded CSV" and (auto_master is None or auto_prices is None or auto_prices.empty):
+    st.warning("Fetch price candles to start the scanner. NSE coverage and Yahoo price coverage are different.")
+    st.stop()
 try:
-    master = pd.read_csv(master_file, dtype=str)
-    prices = pd.read_csv(prices_file)
+    master = pd.read_csv(master_file,dtype=str) if mode=="Uploaded CSV" else auto_master.copy()
+    prices = pd.read_csv(prices_file) if mode=="Uploaded CSV" else auto_prices.copy()
     master.columns = master.columns.str.lower().str.strip()
     prices.columns = prices.columns.str.lower().str.strip()
     required_master = {"symbol","sector"}
     required_prices = {"datetime","symbol","open","high","low","close"}
     if not required_master.issubset(master.columns) or not required_prices.issubset(prices.columns):
         raise ValueError("CSV headers missing. Review required formats above.")
-    master = master[["symbol","sector"]].dropna().drop_duplicates()
+    master = master[["symbol","sector"]].fillna({"sector":"Unclassified"}).drop_duplicates()
     master["symbol"] = master["symbol"].str.upper().str.strip()
     prices["symbol"] = prices["symbol"].astype(str).str.upper().str.strip()
     prices["datetime"] = pd.to_datetime(prices["datetime"], errors="coerce")
@@ -115,4 +163,4 @@ with tab3:
     else:
         st.info("Upload verified planetary events to view the event schedule alongside your real price dataset.")
 st.download_button("Export scanner results", report.to_csv(index=False).encode(),file_name="nse_symbol_sector_scan.csv",mime="text/csv")
-st.caption("Research interface only. No live-feed connection, Telegram delivery, automated future forecasts, or out-of-sample reliability is claimed.")
+st.caption("Yahoo is a best-effort delayed cash feed, not an exchange guaranteed real-time service. TradingView connector is not active inside this app. Futures require expiry-specific licensed or uploaded data. KP event backtests and Telegram delivery are not yet implemented.")
