@@ -1,0 +1,44 @@
+name: NSE Cash Auto Scan
+on:
+  schedule:
+    # UTC times: 09:15–15:30 IST, Mon–Fri, every 15m.
+    - cron: '45 3 * * 1-5'
+    - cron: '0,15,30,45 4-9 * * 1-5'
+    - cron: '0 10 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      verify_only:
+        description: 'Run calendar and session tests only'
+        required: false
+        type: boolean
+        default: true
+permissions:
+  contents: read
+jobs:
+  nse-cash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: Verify session rules and scan available cash
+        env:
+          PYTHONUNBUFFERED: '1'
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.verify_only }}" = "true" ]; then
+            python scheduled_scan.py --verify-only
+          else
+            python scheduled_scan.py --batch-size 60
+          fi
+      - name: Store returned market data
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nse-cash-${{ github.run_id }}
+          path: output/*.csv
+          if-no-files-found: ignore
+          retention-days: 7
